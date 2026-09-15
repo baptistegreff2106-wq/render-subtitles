@@ -1,0 +1,79 @@
+name: Render subtitles (ffmpeg/libass)
+
+# Triggered remotely by n8n via the GitHub REST API (workflow_dispatch).
+# No production data lives in this repo; everything content-specific is an input.
+on:
+  workflow_dispatch:
+    inputs:
+      video_url:
+        description: "URL of the source MP4 to burn subtitles onto"
+        required: true
+        type: string
+      ass_url:
+        description: "URL of the .ass subtitle file"
+        required: true
+        type: string
+      output_name:
+        description: "Target object name in the storage bucket"
+        required: true
+        type: string
+      callback_url:
+        description: "Optional URL to POST the result to when done"
+        required: false
+        type: string
+      correlation_id:
+        description: "Optional id echoed back to the caller (e.g. video_id)"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  # Avoid two renders of the same output clobbering each other.
+  group: render-${{ github.event.inputs.output_name }}
+  cancel-in-progress: false
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout (fonts + scripts)
+        uses: actions/checkout@v4
+
+      - name: Install ffmpeg
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y ffmpeg
+          ffmpeg -hide_banner -version | head -n 1
+
+      - name: Render and upload
+        env:
+          VIDEO_URL: ${{ github.event.inputs.video_url }}
+          ASS_URL: ${{ github.event.inputs.ass_url }}
+          OUTPUT_NAME: ${{ github.event.inputs.output_name }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_BUCKET: ${{ secrets.SUPABASE_BUCKET }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          FFMPEG_PRESET: medium
+          FFMPEG_CRF: "18"
+          # Thread cap: local validation showed libx264 with many threads was
+          # OOM-killed (exit 137). Keep this low; runners have 2 vCPU anyway.
+          FFMPEG_THREADS: "2"
+        run: |
+          chmod +x scripts/render.sh
+          scripts/render.sh
+
+      - name: Notify caller (optional)
+        if: ${{ always() && github.event.inputs.callback_url != '' }}
+        env:
+          CALLBACK_URL: ${{ github.event.inputs.callback_url }}
+          OUTPUT_NAME: ${{ github.event.inputs.output_name }}
+          CORRELATION_ID: ${{ github.event.inputs.correlation_id }}
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          curl -fsS -X POST "$CALLBACK_URL" \
+            -H "Content-Type: application/json" \
+            --data "{\"correlation_id\":\"${CORRELATION_ID}\",\"output_name\":\"${OUTPUT_NAME}\",\"status\":\"${JOB_STATUS}\"}" \
+            || echo "callback failed (non-fatal)"
