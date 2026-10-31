@@ -73,6 +73,10 @@ def main():
     if len(sys.argv) != 3:
         sys.exit('Usage: assemble.py timeline.json output.mp4')
     data = json.loads(Path(sys.argv[1]).read_text(encoding='utf-8'))
+    if isinstance(data, list):
+    if len(data) != 1 or not isinstance(data[0], dict):
+        raise ValueError("Expected one timeline object")
+    data = data[0]
     body = data.get('shotstack_body', data)
     clips = body['timeline']['tracks'][0]['clips']
     if not clips:
