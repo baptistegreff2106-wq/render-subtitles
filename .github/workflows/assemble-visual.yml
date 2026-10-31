@@ -2,12 +2,8 @@ name: Assemble visual video (FFmpeg)
 on:
   workflow_dispatch:
     inputs:
-      timeline_json:
-        description: 'Full JSON output from Build Timeline (shotstack_body or root body)'
-        required: true
-        type: string
       output_name:
-        description: 'Visual-only MP4 object name, e.g. acc_a_123_visual.mp4'
+        description: 'Test MP4 name in Supabase Videos bucket'
         required: true
         type: string
 permissions:
@@ -24,11 +20,7 @@ jobs:
       - name: Install FFmpeg
         run: sudo apt-get update -y && sudo apt-get install -y ffmpeg
       - name: Assemble silent visual
-        env:
-          TIMELINE_JSON: ${{ inputs.timeline_json }}
-        run: |
-          python3 -c 'import os, pathlib; pathlib.Path("timeline.json").write_text(os.environ["TIMELINE_JSON"], encoding="utf-8")'
-          python3 scripts/assemble.py timeline.json visual.mp4
+        run: python3 scripts/assemble.py test-data/timeline.json visual.mp4
       - name: Upload visual MP4 to Supabase
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
