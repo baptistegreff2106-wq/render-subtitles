@@ -28,10 +28,10 @@ def render_segment(image, clip, target):
     frames = max(1, round(duration * FPS))
     effect = clip.get('effect', 'zoomIn')
     if effect == 'zoomOut':
-        zoom = f"max(1.0,1.12-0.12*on/{max(1, frames-1)})"
+        zoom = f"max(1.0,1.04-0.04*on/{max(1, frames-1)})"
         panx, pany = '(iw-iw/zoom)/2', '(ih-ih/zoom)/2'
     elif effect in ('slideLeft', 'slideRight', 'slideUp'):
-        zoom = '1.12'
+        zoom = '1.04'
         p = f'on/{max(1, frames-1)}'
         if effect == 'slideLeft':
             panx, pany = f'(iw-iw/zoom)*{p}', '(ih-ih/zoom)/2'
@@ -40,7 +40,7 @@ def render_segment(image, clip, target):
         else:
             panx, pany = '(iw-iw/zoom)/2', f'(ih-ih/zoom)*{p}'
     else:
-        zoom = f"min(1.12,1.0+0.12*on/{max(1, frames-1)})"
+        zoom = f"min(1.04,1.0+0.04*on/{max(1, frames-1)})"
         panx, pany = '(iw-iw/zoom)/2', '(ih-ih/zoom)/2'
     fade = min(0.35, duration / 5)
     transition = clip.get('transition', {})
