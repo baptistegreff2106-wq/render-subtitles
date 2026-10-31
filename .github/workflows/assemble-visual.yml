@@ -20,7 +20,7 @@ jobs:
       - name: Install FFmpeg
         run: sudo apt-get update -y && sudo apt-get install -y ffmpeg
       - name: Assemble silent visual
-        run: python3 scripts/assemble.py test-data/timeline.json visual.mp4
+        run: python3 scripts/assemble.py timeline.json visual.mp4
       - name: Upload visual MP4 to Supabase
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
