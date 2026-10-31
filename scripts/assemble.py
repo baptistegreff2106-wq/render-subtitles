@@ -44,8 +44,8 @@ def render_segment(image, clip, target):
         panx, pany = '(iw-iw/zoom)/2', '(ih-ih/zoom)/2'
     fade = min(0.35, duration / 5)
     transition = clip.get('transition', {})
-    vf = (f'scale=1296:2304:force_original_aspect_ratio=increase,'
-          f'crop=1296:2304,setsar=1,'
+    vf = (f'scale=2160:3840:force_original_aspect_ratio=increase:flags=lanczos,'
+      f'crop=2160:3840,setsar=1,'
           f"zoompan=z='{zoom}':x='{panx}':y='{pany}':d={frames}:s={WIDTH}x{HEIGHT}:fps={FPS},"
           f'format=yuv420p')
     if transition.get('in') == 'fade':
