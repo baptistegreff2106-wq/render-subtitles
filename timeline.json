@@ -1,0 +1,18 @@
+[
+  {
+    "video_id": "acc_a_1793433673972",
+    "shotstack_body": {
+      "timeline": {
+        "background": "#000000",
+        "tracks": [{"clips": [
+          {"asset":{"type":"image","src":"https://zlvuuhvmwsfympirdeow.supabase.co/storage/v1/object/public/Images/acc_a_1793433673972_reh_intro.jpg?cb=1793439022180"},"start":0,"length":6.988,"effect":"zoomIn","fit":"crop","transition":{"out":"fade"}},
+          {"asset":{"type":"image","src":"https://zlvuuhvmwsfympirdeow.supabase.co/storage/v1/object/public/Images/acc_a_1793433673972_reh_s3.jpg?cb=1793439022180"},"start":6.988,"length":21.193,"effect":"zoomIn","fit":"crop","transition":{"in":"fade","out":"fade"}},
+          {"asset":{"type":"image","src":"https://zlvuuhvmwsfympirdeow.supabase.co/storage/v1/object/public/Images/acc_a_1793433673972_reh_s4.png?cb=1793439022180"},"start":28.181,"length":21.193,"effect":"zoomOut","fit":"crop","transition":{"in":"fade","out":"fade"}},
+          {"asset":{"type":"image","src":"https://zlvuuhvmwsfympirdeow.supabase.co/storage/v1/object/public/Images/acc_a_1793433673972_reh_s5.jpg?cb=1793439022180"},"start":49.373,"length":21.193,"effect":"slideLeft","fit":"crop","transition":{"in":"fade","out":"fade"}}
+        ]}]
+      },
+      "output":{"format":"mp4","size":{"width":1080,"height":1920},"fps":15,"quality":"low"}
+    },
+    "intro_duration":6.988,"total_duration":70.566
+  }
+]
