@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """Assemble a silent 9:16 MP4 from the shotstack_body produced by W6 Build Timeline.
 
-Usage: python scripts/assemble.py timeline.json output.mp4
+Usage: python scripts/assemble.py timeline.json output.mp4 [--target-duration SECONDS]
 No service credentials are required; image URLs must be accessible.
 """
+import argparse
+import copy
 import json
 import math
 import subprocess
@@ -69,27 +71,73 @@ def render_segment(image, clip, target):
          '-threads', '2', str(target)])
 
 
-def main():
-    if len(sys.argv) != 3:
-        sys.exit('Usage: assemble.py timeline.json output.mp4')
-    data = json.loads(Path(sys.argv[1]).read_text(encoding='utf-8'))
-    body = data.get('shotstack_body', data)
-    clips = body['timeline']['tracks'][0]['clips']
+def prepare_clips(clips, target_duration=None):
+    """Validate source timing and distribute target frames across animated clips.
+
+    The target includes the final fade; no extra second is appended. Round the
+    total upward so the visual cannot end before narration (at most one frame).
+    Cumulative boundaries avoid per-segment rounding drift.
+    """
     if not clips:
         raise ValueError('No clips')
-    assert body['output']['size'] == {'width': WIDTH, 'height': HEIGHT}
-    if int(body['output']['fps']) != FPS:
-        raise ValueError('Expected 15 FPS')
     previous_end = 0.0
+    lengths = []
+    for clip in clips:
+        if clip['asset']['type'] != 'image':
+            raise ValueError('Unsupported asset type')
+        start, length = float(clip['start']), float(clip['length'])
+        if not math.isfinite(start) or not math.isfinite(length) or length <= 0:
+            raise ValueError('Clip times must be finite and lengths positive')
+        if abs(start - previous_end) > 0.003:
+            raise ValueError('Gap/overlap in timeline; refusing truncated render')
+        previous_end = start + length
+        lengths.append(length)
+    result = copy.deepcopy(clips)
+    if target_duration is None:
+        if previous_end > 70:
+            print('WARNING: source timeline exceeds 70 seconds; correct upstream timing.', file=sys.stderr)
+        return result
+    target = float(target_duration)
+    if not math.isfinite(target) or target <= 0:
+        raise ValueError('Target duration must be finite and positive')
+    if target > 70:
+        raise ValueError('Narration/target exceeds 70 seconds: shorten the script and regenerate narration upstream; do not truncate or change audio speed')
+    total_frames = math.ceil(target * FPS)
+    if total_frames < len(clips):
+        raise ValueError('Target too short: each image needs at least one frame')
+    total_length = math.fsum(lengths)
+    cumulative, boundary = 0.0, 0
+    for idx, (clip, length) in enumerate(zip(result, lengths)):
+        cumulative += length
+        end = round(cumulative / total_length * total_frames)
+        # Reserve one frame per remaining clip, even for tiny source segments.
+        end = min(total_frames - (len(clips) - idx - 1), max(boundary + 1, end))
+        clip['start'] = boundary / FPS
+        clip['length'] = (end - boundary) / FPS
+        boundary = end
+    print(f'Timeline: {total_length:.3f}s -> {total_frames / FPS:.3f}s '
+          f'({total_frames} frames; target {target:.3f}s includes final fade)')
+    return result
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('timeline')
+    parser.add_argument('output')
+    parser.add_argument('--target-duration', type=float,
+                        help='Measured narration duration in seconds, including final fade (maximum 70)')
+    args = parser.parse_args()
+    data = json.loads(Path(args.timeline).read_text(encoding='utf-8'))
+    body = data.get('shotstack_body', data)
+    clips = prepare_clips(body['timeline']['tracks'][0]['clips'], args.target_duration)
+    if body['output']['size'] != {'width': WIDTH, 'height': HEIGHT}:
+        raise ValueError('Expected 1080 x 1920 output')
+    if float(body['output']['fps']) != FPS:
+        raise ValueError('Expected 15 FPS')
     with tempfile.TemporaryDirectory() as td:
         folder = Path(td)
         paths = []
         for idx, clip in enumerate(clips):
-            if clip['asset']['type'] != 'image':
-                raise ValueError('Unsupported asset type')
-            if abs(float(clip['start']) - previous_end) > 0.003:
-                raise ValueError('Gap/overlap in timeline; refusing truncated render')
-            previous_end = float(clip['start']) + float(clip['length'])
             image = folder / f'input_{idx}.img'
             segment = folder / f'segment_{idx}.mp4'
             download(clip['asset']['src'], image)
@@ -99,8 +147,8 @@ def main():
         listfile.write_text(''.join(f"file '{p}'\n" for p in paths), encoding='utf-8')
         run(['ffmpeg', '-hide_banner', '-loglevel', 'error', '-y', '-f', 'concat',
              '-safe', '0', '-i', str(listfile), '-an', '-c', 'copy',
-             '-movflags', '+faststart', str(Path(sys.argv[2]).resolve())])
-    print('Rendered:', sys.argv[2])
+             '-movflags', '+faststart', str(Path(args.output).resolve())])
+    print('Rendered:', args.output)
 
 
 if __name__ == '__main__':
