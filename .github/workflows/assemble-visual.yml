@@ -6,6 +6,10 @@ on:
         description: 'Full JSON output from Build Timeline (shotstack_body or root body)'
         required: true
         type: string
+      target_duration:
+        description: 'Measured narration duration in seconds, including final fade (max 70); empty keeps source timing'
+        required: false
+        type: string
       output_name:
         description: 'Visual-only MP4 object name, e.g. acc_a_123_visual.mp4'
         required: true
@@ -26,9 +30,14 @@ jobs:
       - name: Assemble silent visual
         env:
           TIMELINE_JSON: ${{ inputs.timeline_json }}
+          TARGET_DURATION: ${{ inputs.target_duration }}
         run: |
           python3 -c 'import os, pathlib; pathlib.Path("timeline.json").write_text(os.environ["TIMELINE_JSON"], encoding="utf-8")'
-          python3 scripts/assemble.py timeline.json visual.mp4
+          args=()
+          if [[ -n "$TARGET_DURATION" ]]; then
+            args+=(--target-duration "$TARGET_DURATION")
+          fi
+          python3 scripts/assemble.py timeline.json visual.mp4 "${args[@]}"
       - name: Upload visual MP4 to Supabase
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
