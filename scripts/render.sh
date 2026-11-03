@@ -16,6 +16,9 @@
 #   SUPABASE_SERVICE_KEY  Service role key (from repo secret; never logged)
 #
 # Optional:
+#   AUDIO_URL      Narration URL; replaces source audio when provided
+#   DURATION       Positive seconds with narration; defaults to narration duration.
+#                  Ignored without AUDIO_URL to preserve historical behavior.
 #   FFMPEG_PRESET  x264 preset (default: medium)
 #   FFMPEG_CRF     x264 CRF quality (default: 18)
 #   FFMPEG_THREADS Thread cap (default: 2). MUST stay low: during local
@@ -63,9 +66,41 @@ FONTS_DIR="${GITHUB_WORKSPACE:-..}/fonts"
 
 echo "::group::Render (burn subtitles)"
 # libass reads fonts from FONTS_DIR; Barlow Semi Condensed Bold ships with the repo.
-# Audio is stream-copied (no re-encode) to preserve quality and speed.
+# Without narration, audio is stream-copied to preserve quality and speed.
 # -threads / x264 thread caps prevent the exit-137 OOM kill seen locally.
-ffmpeg -hide_banner -y \
+if [[ -n "${AUDIO_URL:-}" ]]; then
+  curl -fSL --retry 3 --retry-delay 2 -o narration.audio "$AUDIO_URL"
+  if ! ffprobe -v error -select_streams a:0 -show_entries stream=codec_type -of csv=p=0 narration.audio | grep -q audio; then
+    echo "ERROR: narration has no audio stream."
+    exit 3
+  fi
+  TARGET_DURATION="${DURATION:-$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 narration.audio)}"
+  if ! LC_ALL=C awk -v d="$TARGET_DURATION" 'BEGIN { exit !(d ~ /^[0-9]+([.][0-9]+)?$/ && d + 0 > 0) }'; then
+    echo "ERROR: duration must be a positive number of seconds."
+    exit 3
+  fi
+  # For clips shorter than a second, fade over the entire clip.
+  FADE_START=$(LC_ALL=C awk -v d="$TARGET_DURATION" 'BEGIN { printf "%.6f", (d > 1 ? d - 1 : 0) }')
+  FADE_LENGTH=$(LC_ALL=C awk -v d="$TARGET_DURATION" 'BEGIN { printf "%.6f", (d < 1 ? d : 1) }')
+  SOURCE_FPS=$(ffprobe -v error -select_streams v:0 -show_entries stream=r_frame_rate -of default=noprint_wrappers=1:nokey=1 source.mp4)
+  # Normalize the filter time base before padding (MP4 time bases may differ from FPS).
+  # Pad before burning subtitles so ASS events continue over the held last frame.
+  # Reset timestamps and pad short narration with silence; -t bounds both streams.
+  ffmpeg -hide_banner -y \
+    -threads "$THREADS" -i source.mp4 \
+    -threads "$THREADS" -i narration.audio \
+    -map 0:v:0 -map 1:a:0 \
+    -vf "setpts=PTS-STARTPTS,fps=${SOURCE_FPS},tpad=stop_mode=clone:stop_duration=${TARGET_DURATION},ass=subs.ass:fontsdir=${FONTS_DIR},fade=t=out:st=${FADE_START}:d=${FADE_LENGTH}" \
+    -af "asetpts=PTS-STARTPTS,apad,afade=t=out:st=${FADE_START}:d=${FADE_LENGTH}" \
+    -t "$TARGET_DURATION" \
+    -c:v libx264 -preset "$PRESET" -crf "$CRF" -pix_fmt yuv420p \
+    -x264-params "threads=${THREADS}:lookahead_threads=1" \
+    -c:a aac -b:a 192k \
+    -movflags +faststart \
+    output.mp4
+else
+  # Historical path: retain source audio unchanged and do not alter duration.
+  ffmpeg -hide_banner -y \
   -threads "$THREADS" \
   -i source.mp4 \
   -vf "ass=subs.ass:fontsdir=${FONTS_DIR}" \
@@ -74,6 +109,7 @@ ffmpeg -hide_banner -y \
   -c:a copy \
   -movflags +faststart \
   output.mp4
+fi
 ls -la output.mp4
 echo "::endgroup::"
 

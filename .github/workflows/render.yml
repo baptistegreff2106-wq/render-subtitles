@@ -13,6 +13,14 @@ on:
         description: "URL of the .ass subtitle file"
         required: true
         type: string
+      audio_url:
+        description: "Optional narration URL (replaces source audio)"
+        required: false
+        type: string
+      duration:
+        description: "Optional duration in seconds with narration (defaults to narration duration)"
+        required: false
+        type: string
       output_name:
         description: "Target object name in the storage bucket"
         required: true
@@ -52,6 +60,8 @@ jobs:
         env:
           VIDEO_URL: ${{ github.event.inputs.video_url }}
           ASS_URL: ${{ github.event.inputs.ass_url }}
+          AUDIO_URL: ${{ github.event.inputs.audio_url }}
+          DURATION: ${{ github.event.inputs.duration }}
           OUTPUT_NAME: ${{ github.event.inputs.output_name }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_BUCKET: ${{ secrets.SUPABASE_BUCKET }}
